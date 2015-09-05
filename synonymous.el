@@ -14,21 +14,26 @@
    :error (function* (lambda (&key error-thrown &allow-other-keys&rest _)
                        (message "Got error: %S" error-thrown)))))
 
+(defmacro synonym-filter (data filterfunc)
+  "Returns a vector of words (matching data) with their synonyms filtered according to FILTERFUNC."
+  `(cl-map 'vector
+	   #'(lambda (word-instance)
+	       (setcdr (assoc 'synonyms word-instance)
+		       (remove-if #'(lambda (w)
+				      (not (funcall ,filterfunc w)))
+				  (assoc-default 'synonyms word-instance)))
+	       word-instance)
+	  data))
+
 (defmacro get-synonyms (word callback)
   `(get-word ,word (function* (lambda (&key data &allow-other-keys)
-				(let* ((words (assoc-default 'synonyms data))
-				       (word-list (cl-loop for w across words
-							   when (< 0 (assoc-default 'relevance w))
-							   collect (assoc-default 'word w))))
-				  (funcall ,callback :data word-list))))))
+				(setq data (synonym-filter data #'(lambda (w) (< 0 (assoc-default 'relevance w)))))
+				(funcall ,callback :data data)))))
 
 (defmacro get-antonyms (word callback)
   `(get-word ,word (function* (lambda (&key data &allow-other-keys)
-				(let* ((words (assoc-default 'synonyms data))
-				       (word-list (cl-loop for w across words
-							    when (> 0 (assoc-default 'relevance w))
-							    collect (assoc-default 'word w))))
-				  (funcall ,callback :data word-list))))))
+				(setq data (synonym-filter data #'(lambda (w) (> 0 (assoc-default 'relevance w)))))
+				(funcall ,callback :data data)))))
 
 (defun synonymous-synonyms (&optional event opoint)
   (interactive)
@@ -39,7 +44,6 @@
   (synonymous-replace-word-before-point-synonyms t event opoint))
 
 (defun synonymous-replace-word-before-point-synonyms (&optional antonym event opoint)
-  (interactive)
   (unless (mouse-position)
     (error "Pop-up menus do not work on this terminal"))
   (or opoint (setq opoint (point)))
@@ -93,7 +97,11 @@
                     (t new-pos))))
     (goto-char save)))
 
-(defun synonymous-emacs-popup (event poss word)
+(defun extract-synonym-strings (word-instance)
+  (mapcar #'(lambda (syn) (assoc-default 'word syn))
+	  (assoc-default 'synonyms word-instance)))
+
+(defun synonymous-emacs-popup (event data word)
   "The Emacs popup menu."
   (unless window-system
     (error "This command requires pop-up dialogs"))
@@ -107,8 +115,12 @@
         (setq event (list (list (car (cdr mouse-pos))
                                 (1+ (cdr (cdr mouse-pos))))
                           (car mouse-pos)))))
-  (let* ((cor-menu (mapcar (lambda (syn)
-                             (list syn syn))
-                           poss))
-         (menu       (cons "synonymous" cor-menu)))
-    (car (x-popup-menu event (list word menu)))))
+  (cl-flet ((build-menu (word-instance)
+			(let ((part-of-speech (assoc-default 'part_of_speech word-instance))
+			      (cor-menu (mapcar #'(lambda (syn) (list syn syn))
+					     (extract-synonym-strings word-instance))))
+			  (cons (format "%s (%s)" word part-of-speech) cor-menu))))
+    (car (x-popup-menu event (cons word (pcase (length data)
+					  (`1 (list (build-menu (elt data 0))))
+					  (_ (mapcar #'build-menu data))))))))
+
