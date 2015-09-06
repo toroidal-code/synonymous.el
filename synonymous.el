@@ -3,7 +3,8 @@
 ;; Copyright (C) 2015 Katherine Whitlock
 ;;
 ;; Author: Katherine Whitlock <toroidalcode@gmail.com>
-;; URL: http://github.com/toroidal-code/cycle-themes.el
+;;         Snippets adapted from FlySpell, authored by Manuel Serrano <Manuel.Serrano@inria.fr>
+;; URL: http://github.com/toroidal-code/synonymous.el
 ;; Version: 1.0
 ;; Package-Requires: ((cl-lib "0.5") (request "0.2.0"))
 ;; Keywords: Utility
