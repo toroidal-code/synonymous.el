@@ -1,3 +1,45 @@
+;; synonymous.el --- A thesaurus at your fingertips
+
+;; Copyright (C) 2015 Katherine Whitlock
+;;
+;; Author: Katherine Whitlock <toroidalcode@gmail.com>
+;; URL: http://github.com/toroidal-code/cycle-themes.el
+;; Version: 1.0
+;; Package-Requires: ((cl-lib "0.5") (request "0.2.0"))
+;; Keywords: Utility
+
+;; This file is not part of GNU Emacs.
+
+;;; Commentary:
+
+;; Synonymous is a thesaurus client that allows you to look up words and
+;; replace them with a chosen synonym or antonym.
+
+;; To use, simply place the cursor over a word, and use either
+;; M-x synonymous-synonyms or M-x synonymous-antonyms
+
+;;; Installation
+
+;; Simply (require 'synonymous)
+
+;;; License:
+
+;; This program is free software; you can redistribute it and/or modify it under
+;; the terms of the GNU General Public License as published by the Free Software
+;; Foundation; either version 3 of the License, or (at your option) any later
+;; version.
+;;
+;; This program is distributed in the hope that it will be useful, but WITHOUT
+;; ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+;; FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+;; details.
+;;
+;; You should have received a copy of the GNU General Public License along with
+;; GNU Emacs; see the file COPYING.  If not, write to the Free Software
+;; Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+;; USA.
+
+;;; Code:
 (require 'url)
 (require 'url-http)
 (require 'request)
@@ -8,7 +50,7 @@
 
 (defmacro get-word (word callback)
   `(request
-   (format "http://localhost:9292/%s" ,word)
+   (format "http://synonymous.heroku.com/%s" ,word)
    :parser 'json-read
    :success ,callback
    :error (function* (lambda (&key error-thrown &allow-other-keys&rest _)
@@ -35,15 +77,8 @@
 				(setq data (synonym-filter data #'(lambda (w) (> 0 (assoc-default 'relevance w)))))
 				(funcall ,callback :data data)))))
 
-(defun synonymous-synonyms (&optional event opoint)
-  (interactive)
-  (synonymous-replace-word-before-point-synonyms nil event opoint))
-
-(defun synonymous-antonyms (&optional event opoint)
-  (interactive)
-  (synonymous-replace-word-before-point-synonyms t event opoint))
-
-(defun synonymous-replace-word-before-point-synonyms (&optional antonym event opoint)
+(defun synonymous-replace-word (&optional antonym event opoint)
+  "Prepare to replace a word with a synonym or antonym"
   (unless (mouse-position)
     (error "Pop-up menus do not work on this terminal"))
   (or opoint (setq opoint (point)))
@@ -57,47 +92,40 @@
        (opoint opoint)
        (callback (function* (lambda (&key data &allow-other-keys)
 			      (let ((replace (synonymous-emacs-popup event data word)))
-				(synonymous-do-replace replace data word cursor-location start end opoint))))))
+				(synonymous-do-replace replace word cursor-location start end opoint))))))
     (if (not antonym)
 	(get-synonyms word callback)
       (get-antonyms word callback))))
 
 
-(defun synonymous-do-replace (replace poss word cursor-location start end save)
+(defun synonymous-do-replace (replace word cursor-location start end save)
   "The popup menu callback."
   (cond ((eq replace 'ignore)
          (goto-char save)
          nil)
         (replace
          (let ((old-max (point-max))
-               (new-word (if (atom replace)
-                             replace
-                           (car replace)))
-               (cursor-location (+ (- (length word) (- end start))
-                                   cursor-location)))
-           (unless (equal new-word (car poss))
-             (delete-region start end)
-             (goto-char start)
-             (insert new-word))
-           ;; In the original Emacs code, this was only called in the body
-           ;; of the if.  I arbitrarily kept the XEmacs behavior instead.
-           (synonymous-ajust-cursor-point save cursor-location old-max)))
+               (new-word (if (atom replace) replace (car replace)))
+               (cursor-location (+ (- (length word) (- end start)) cursor-location)))
+	   (delete-region start end)
+	   (goto-char start)
+	   (insert new-word)
+	   (synonymous-adjust-cursor-point save cursor-location old-max)))
         (t
          (goto-char save)
          nil)))
 
-(defun synonymous-ajust-cursor-point (save cursor-location old-max)
+(defun synonymous-adjust-cursor-point (save cursor-location old-max)
   (if (>= save cursor-location)
       (let ((new-pos (+ save (- (point-max) old-max))))
-        (goto-char (cond
-                    ((< new-pos (point-min))
-                     (point-min))
-                    ((> new-pos (point-max))
-                     (point-max))
-                    (t new-pos))))
+        (goto-char (pcase new-pos
+		     ((pred (> (point-min))) (point-min))
+		     ((pred (< (point-max))) (point-max))
+		     (_ new-pos))))
     (goto-char save)))
 
 (defun extract-synonym-strings (word-instance)
+  "Given a WORD-INSTANCE, collect all of the word's synonyms into a list of strings."
   (mapcar #'(lambda (syn) (assoc-default 'word syn))
 	  (assoc-default 'synonyms word-instance)))
 
@@ -117,10 +145,28 @@
                           (car mouse-pos)))))
   (cl-flet ((build-menu (word-instance)
 			(let ((part-of-speech (assoc-default 'part_of_speech word-instance))
+			      (similar (mapconcat #'identity (assoc-default 'similar word-instance) ", "))
 			      (cor-menu (mapcar #'(lambda (syn) (list syn syn))
 					     (extract-synonym-strings word-instance))))
-			  (cons (format "%s (%s)" word part-of-speech) cor-menu))))
-    (car (x-popup-menu event (cons word (pcase (length data)
-					  (`1 (list (build-menu (elt data 0))))
-					  (_ (mapcar #'build-menu data))))))))
+			  (cons (format "%s (%s) %s" word part-of-speech similar) cor-menu))))
+    (car (x-popup-menu event (pcase (length data)
+			       (`1 (let ((menu (list (build-menu (elt data 0)))))
+				     (cons (caar menu) menu)))
+			       (_ (cons word (mapcar #'build-menu data))))))))
 
+
+;;;###autoload
+(defun synonymous-synonyms (&optional event opoint)
+  "Lookup synonyms for a word."
+  (interactive)
+  (synonymous-replace-word nil event opoint))
+
+;;;###autoload
+(defun synonymous-antonyms (&optional event opoint)
+  "Lookup antonyms for a word."
+  (interactive)
+  (synonymous-replace-word t event opoint))
+
+
+(provide 'synonymous)
+;;; synonymous.el ends here
