@@ -1,4 +1,4 @@
-;; synonymous.el --- A thesaurus at your fingertips
+;;; synonymous.el --- A thesaurus at your fingertips
 
 ;; Copyright (C) 2015 Katherine Whitlock
 ;;
