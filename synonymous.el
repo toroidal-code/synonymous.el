@@ -66,7 +66,7 @@
 				      (not (funcall ,filterfunc w)))
 				  (assoc-default 'synonyms word-instance)))
 	       word-instance)
-	  data))
+	  ,data))
 
 (defmacro get-synonyms (word callback)
   `(get-word ,word (function* (lambda (&key data &allow-other-keys)
