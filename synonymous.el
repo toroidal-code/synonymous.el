@@ -52,29 +52,29 @@
    (format "http://synonymous.heroku.com/%s" ,word)
    :parser 'json-read
    :success ,callback
-   :error (function* (lambda (&key error-thrown &allow-other-keys&rest _)
-                       (message "Got error: %S" error-thrown)))))
+   :error (cl-function (lambda (&key error-thrown &allow-other-keys)
+                         (message "Got error: %S" error-thrown)))))
 
 (defmacro synonym-filter (data filterfunc)
   "Returns a vector of words (matching data) with their synonyms filtered according to FILTERFUNC."
   `(cl-map 'vector
 	   #'(lambda (word-instance)
 	       (setcdr (assoc 'synonyms word-instance)
-		       (remove-if #'(lambda (w)
-				      (not (funcall ,filterfunc w)))
-				  (assoc-default 'synonyms word-instance)))
+		       (cl-remove-if #'(lambda (w)
+					 (not (funcall ,filterfunc w)))
+				     (assoc-default 'synonyms word-instance)))
 	       word-instance)
 	  ,data))
 
 (defmacro get-synonyms (word callback)
-  `(get-word ,word (function* (lambda (&key data &allow-other-keys)
-				(setq data (synonym-filter data #'(lambda (w) (< 0 (assoc-default 'relevance w)))))
-				(funcall ,callback :data data)))))
+  `(get-word ,word (cl-function (lambda (&key data &allow-other-keys)
+				  (setq data (synonym-filter data #'(lambda (w) (< 0 (assoc-default 'relevance w)))))
+				  (funcall ,callback :data data)))))
 
 (defmacro get-antonyms (word callback)
-  `(get-word ,word (function* (lambda (&key data &allow-other-keys)
-				(setq data (synonym-filter data #'(lambda (w) (> 0 (assoc-default 'relevance w)))))
-				(funcall ,callback :data data)))))
+  `(get-word ,word (cl-function (lambda (&key data &allow-other-keys)
+				  (setq data (synonym-filter data #'(lambda (w) (> 0 (assoc-default 'relevance w)))))
+				  (funcall ,callback :data data)))))
 
 (defun synonymous-replace-word (&optional antonym event opoint)
   "Prepare to replace a word with a synonym or antonym"
@@ -89,9 +89,9 @@
        (end (cdr bounds))
        (event event)
        (opoint opoint)
-       (callback (function* (lambda (&key data &allow-other-keys)
-			      (let ((replace (synonymous-emacs-popup event data word)))
-				(synonymous-do-replace replace word cursor-location start end opoint))))))
+       (callback (cl-function (lambda (&key data &allow-other-keys)
+				(let ((replace (synonymous-emacs-popup event data word)))
+				  (synonymous-do-replace replace word cursor-location start end opoint))))))
     (if (not antonym)
 	(get-synonyms word callback)
       (get-antonyms word callback))))
