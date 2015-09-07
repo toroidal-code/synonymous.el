@@ -1,4 +1,4 @@
-;;; synonymous.el --- A thesaurus at your fingertips
+;;; synonymous.el --- A thesaurus at your fingertips -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2015 Katherine Whitlock
 ;;
@@ -6,7 +6,7 @@
 ;;         Snippets adapted from FlySpell, authored by Manuel Serrano <Manuel.Serrano@inria.fr>
 ;; URL: http://github.com/toroidal-code/synonymous.el
 ;; Version: 1.0
-;; Package-Requires: ((cl-lib "0.5") (request "0.2.0"))
+;; Package-Requires: ((emacs "24") (cl-lib "0.5") (request "0.2.0"))
 ;; Keywords: Utility
 
 ;; This file is not part of GNU Emacs.
@@ -47,8 +47,6 @@
 (require 'json)
 (require 'thingatpt)
 
-(setq lexical-binding t)
-
 (defmacro get-word (word callback)
   `(request
    (format "http://synonymous.heroku.com/%s" ,word)
@@ -83,7 +81,7 @@
   (unless (mouse-position)
     (error "Pop-up menus do not work on this terminal"))
   (or opoint (setq opoint (point)))
-  (lexical-let*
+  (let*
       ((cursor-location (point))
        (word (thing-at-point 'word))
        (bounds (bounds-of-thing-at-point 'word))
