@@ -46,8 +46,10 @@
 (require 'request)
 (require 'json)
 (require 'thingatpt)
+(require 'cl-lib)
 
-(defmacro get-word (word callback)
+
+(defmacro synonymous-get-word (word callback)
   `(request
    (format "http://synonymous.heroku.com/%s" ,word)
    :parser 'json-read
@@ -55,7 +57,7 @@
    :error (cl-function (lambda (&key error-thrown &allow-other-keys)
                          (message "Got error: %S" error-thrown)))))
 
-(defmacro synonym-filter (data filterfunc)
+(defmacro synonymous-synonym-filter (data filterfunc)
   "Returns a vector of words (matching data) with their synonyms filtered according to FILTERFUNC."
   `(cl-map 'vector
 	   #'(lambda (word-instance)
@@ -66,14 +68,14 @@
 	       word-instance)
 	  ,data))
 
-(defmacro get-synonyms (word callback)
-  `(get-word ,word (cl-function (lambda (&key data &allow-other-keys)
-				  (setq data (synonym-filter data #'(lambda (w) (< 0 (assoc-default 'relevance w)))))
+(defmacro synonymous-get-synonyms (word callback)
+  `(synonymous-get-word ,word (cl-function (lambda (&key data &allow-other-keys)
+				  (setq data (synonymous-synonym-filter data #'(lambda (w) (< 0 (assoc-default 'relevance w)))))
 				  (funcall ,callback :data data)))))
 
-(defmacro get-antonyms (word callback)
-  `(get-word ,word (cl-function (lambda (&key data &allow-other-keys)
-				  (setq data (synonym-filter data #'(lambda (w) (> 0 (assoc-default 'relevance w)))))
+(defmacro synonymous-get-antonyms (word callback)
+  `(synonymous-get-word ,word (cl-function (lambda (&key data &allow-other-keys)
+				  (setq data (synonymous-synonym-filter data #'(lambda (w) (> 0 (assoc-default 'relevance w)))))
 				  (funcall ,callback :data data)))))
 
 (defun synonymous-replace-word (&optional antonym event opoint)
@@ -93,8 +95,8 @@
 				(let ((replace (synonymous-emacs-popup event data word)))
 				  (synonymous-do-replace replace word cursor-location start end opoint))))))
     (if (not antonym)
-	(get-synonyms word callback)
-      (get-antonyms word callback))))
+	(synonymous-get-synonyms word callback)
+      (synonymous-get-antonyms word callback))))
 
 
 (defun synonymous-do-replace (replace word cursor-location start end save)
@@ -123,7 +125,7 @@
 		     (_ new-pos))))
     (goto-char save)))
 
-(defun extract-synonym-strings (word-instance)
+(defun synonymous-extract-synonym-strings (word-instance)
   "Given a WORD-INSTANCE, collect all of the word's synonyms into a list of strings."
   (mapcar #'(lambda (syn) (assoc-default 'word syn))
 	  (assoc-default 'synonyms word-instance)))
@@ -146,7 +148,7 @@
 			(let ((part-of-speech (assoc-default 'part_of_speech word-instance))
 			      (similar (mapconcat #'identity (assoc-default 'similar word-instance) ", "))
 			      (cor-menu (mapcar #'(lambda (syn) (list syn syn))
-					     (extract-synonym-strings word-instance))))
+					     (synonymous-extract-synonym-strings word-instance))))
 			  (cons (format "%s (%s) %s" word part-of-speech similar) cor-menu))))
     (car (x-popup-menu event (pcase (length data)
 			       (`1 (let ((menu (list (build-menu (elt data 0)))))
