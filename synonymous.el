@@ -51,7 +51,7 @@
 
 (defmacro synonymous-get-word (word callback)
   `(request
-   (format "http://synonymous.heroku.com/%s" ,word)
+   (format "http://synonymous-toroidalcode.rhcloud.com/%s" ,word)
    :parser 'json-read
    :success ,callback
    :error (cl-function (lambda (&key error-thrown &allow-other-keys)
